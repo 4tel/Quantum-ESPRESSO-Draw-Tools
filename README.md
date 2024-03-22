@@ -9,4 +9,4 @@ I Try to improve my code.
 * DrawBandStructure : Draw Band Structure Graph. It needs .gnu file. (TODO : improve)
 * ExtractDataFromOutput : Extract Datas from many output file. (TODO : improve)
 * NebEnergyBarrier : Draw graph that Energy of NEB(Nudged Elastic Band) Calculation. (TODO : improve)
-* downloadPS.py : Download all of Pseudo Potential in Quantum Espresso.
+* downloadPP.py : Download all of Pseudo Potential in Quantum Espresso.
