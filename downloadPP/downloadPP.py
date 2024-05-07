@@ -1,114 +1,71 @@
-from urllib.request import urlopen
-from re import compile, findall
-from pathlib import Path
-from functools import wraps
+from pathlib  import Path
+from sys      import stdout
+from Utils  import timer
+from gethtml  import *
+from constant import *
 
-SaveDir='Test'
+# Download url text and save it to filename in directory
+def download_file(url:str, directory:Path, filename:str) -> None:
+    stdout.write(filename)
+    newFile = directory / filename
 
-# Path
-QEPath = 'https://pseudopotentials.quantum-espresso.org'
-TablePath = 'legacy_tables'
-PP_Table = ('ps-library','hartwigesen-goedecker-hutter-pp','fhi-pp-from-abinit-web-site','original-qe-pp-library')
+    # download file
+    if newFile.exists():stdout.write(f'{filename} already exists\n')
+    else:
+        with open(newFile, 'w') as f:f.write(get_file(url))
+        stdout.write(f'{filename} successfully created\n')
+    stdout.flush()
 
-# condition
-elements_condition = b'"/%b/' % TablePath.encode()
-filelink_condition = b'href="/upf'
+# Download PP files of element
+def download_element(PP:str, element:str, directory:Path) -> None:
+    # get links
+    files = get_file_links(f'{QEPath}/{TablePath}/{PP}/{element.lower()}')
+    stdout.write(f'{element} Downloading.. (count : {len(files)})\n')
 
-# pattern
-elements_pattern = compile('[A-Z][a-z]*')
-filelink_pattern = compile('["][/].+UPF["]')
+    # download PP file of element
+    for file in files:
+        file = file.strip('"')
+        url = f'{QEPath}/{file}'
+        filename = file.split('/')[-1]
 
-
-def _get_html(url):
-    response = urlopen(url)
-    return response.read()
-
-def _get_all_elements(url):
-    html = _get_html(url)
-    elements = []
-    lines = html.split(b'\n')
-    for line in lines:
-        if elements_condition in line:
-            elements.append(findall(elements_pattern, str(line))[0])
-    return elements
-
-def _get_file_links(url):
-    html = _get_html(url)
-    lines = html.split(b'\n')
-    links = []
-    for line in lines:
-        if filelink_condition in line:
-            links.append(findall(filelink_pattern, str(line))[0])
-    return links
-
-def _get_file(url):
-    html = _get_html(url)
-    try:
-        return str(html, 'cp949')
-    except:
-        return str(html, 'utf-8')
-
-def timer(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        from time import time
-        start_time = time()  # 시작 시간 측정
-        result = func(*args, **kwargs)  # 원래 함수 실행
-        end_time = time()  # 종료 시간 측정
-        print(f"{func.__name__} 함수 실행 시간: {end_time - start_time}초")
-        return result
-    return wrapper
+        download_file(url, directory, filename)
+    else:stdout.write('Result : Success')
+    stdout.write('\n\n\n\n\n')
 
 @timer
-def main(PP_skip=[], element_skip=[]):
-    curdir = Path(__file__).parent / SaveDir
+def download_PPTable(directory:Path, PP:str, element_skip=[]) -> None:
+    # get existing element names
+    elements = get_all_elements(f"{QEPath}/{TablePath}/{PP}")
+    stdout.write(f'all elements count in {PP} : {len(elements)}\n\n')
 
-    print("Download Start")
+    # download PPTable    
+    for element in elements:
+        if element in element_skip:continue
+        Dir = directory / element
+        Dir.mkdir(exist_ok=True)
+        download_element(PP, element, Dir)
+
+@timer
+def main(directory:Path, tartget_PP=[], element_skip=[]):
+    stdout.write("Download Start\n")
     for PP in PP_Table:
-        if PP in PP_skip:continue
-        print(f'{PP} Pseudo Potential Downloading..')
-
-        url = f"{QEPath}/{TablePath}/{PP}"
-        elements = _get_all_elements(url)
-        PPDir = curdir / PP
+        if PP not in tartget_PP:continue
+        stdout.write(f'{PP} Pseudo Potential Downloading..\n')
+        PPDir = directory / PP
         PPDir.mkdir(parents=True,exist_ok=True)
-        
-        t = open(curdir/f'{PP}_log.txt','w')
-        t.write(f'all elements count in {PP} : {len(elements)}\n')
-        for element in elements:
-            if element in element_skip:continue
-            print(f'{element} Downloading..')
-            t.write(element)
+        download_PPTable(PPDir, PP, element_skip)
 
-            directory = PPDir / element
-            directory.mkdir(exist_ok=True)
-            url = f'{QEPath}/{TablePath}/{PP}/{element.lower()}'
-            files = _get_file_links(url)
-
-            t.write(f'(count : {len(files)})\n')
-            for file in files:
-                file = file.strip('"')
-                url = f'{QEPath}/{file}'
-                filename = file.split('/')[-1]
-                newFile = directory / filename
-
-                t.write(filename)
-                if newFile.exists():
-                    t.write(f'{filename} already exists\n')
-                else:
-                    with open(newFile, 'w') as f:
-                        f.write(_get_file(url))
-                    t.write(f'{filename} successfully created\n')
-                t.flush()
-            else:
-                t.write('Result : Success')
-            t.write('\n\n\n\n\n')
     print('All Download Completed')
 
 if __name__ == '__main__':
+    directory = Path(__file__).parent / 'Test'
+    directory.mkdir(exist_ok=True)
+
     import json
     with open("elements.json", "r") as file:
         data = json.load(file)
     PeriodicTable:list = data['PeriodicTable']
 
-    main(PP_skip=PP_Table[:3])#, element_skip=PeriodicTable[:PeriodicTable.index('Cd')])
+    t = open(directory / 'log.txt','w')
+    stdout = t
+    main(directory, tartget_PP=PP_Table[0])#, element_skip=PeriodicTable[:PeriodicTable.index('Cd')])
